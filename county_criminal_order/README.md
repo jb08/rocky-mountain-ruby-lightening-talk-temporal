@@ -3,7 +3,7 @@
 October 1 GA Announcement:
 > We're excited to announce that the fully-featured Temporal Ruby SDK is generally available.
 
-## Links
+## Information
 
 Temporal
 - https://temporal.io/change-log/ruby-sdk-generally-available
@@ -11,6 +11,13 @@ Temporal
 
 Checkr
 - https://checkr.com/company/careers
+- Building the data platform for safe and fair decisions
+- Justice-impacted Fair chance hiring
+
+## Cursor prompts
+
+> What are Temporal's key primatives? @README_RUBY_SDK.md 
+> In a Signal should you trigger an Activity? @README_RUBY_SDK.md 
 
 ## Commands
 Temporal-UI: http://localhost:8233

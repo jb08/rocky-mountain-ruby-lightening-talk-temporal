@@ -13,6 +13,7 @@ module CountyCriminalOrder
 
       counties.each do |county|
         Temporalio::Workflow.execute_activity(Activities::SendOrder, { aliases:, county: }, **@duration_options)
+        Temporalio::Workflow.sleep(5)
       end
 
       records = Temporalio::Workflow.execute_activity(Activities::ParseResults, **@duration_options)
