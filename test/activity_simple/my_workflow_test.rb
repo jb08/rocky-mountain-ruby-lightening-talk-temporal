@@ -6,7 +6,7 @@ require 'securerandom'
 require 'temporalio/testing'
 require 'temporalio/worker'
 
-module ActivitySimple
+module CountyCriminalOrder
   class MyWorkflowTest < Test
     # Demonstrates mocking out activities
     class MockSelectFromDatabase < Temporalio::Activity::Definition
