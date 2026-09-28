@@ -4,6 +4,9 @@ source "https://rubygems.org"
 gem "rails", "~> 8.0.3"
 # Use postgresql as the database for Active Record
 gem "pg", "~> 1.1"
+# Pin below 3.0: json 3.0 dropped the `quirks_mode` kwarg that activesupport 8.0.5.1's
+# JSON encoder still passes, which breaks jsonb column defaults during migrations.
+gem "json", "~> 2.9"
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", ">= 5.0"
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
@@ -28,6 +31,12 @@ gem "thruster", require: false
 
 # Use Rack CORS for handling Cross-Origin Resource Sharing (CORS), making cross-origin Ajax possible
 # gem "rack-cors"
+
+# Background job processing backed by Redis
+gem "sidekiq"
+
+# Official Temporal Ruby SDK, for durable workflow orchestration
+gem "temporalio", "~> 1.9"
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
