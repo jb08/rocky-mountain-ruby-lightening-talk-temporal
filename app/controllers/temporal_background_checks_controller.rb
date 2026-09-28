@@ -39,7 +39,8 @@ class TemporalBackgroundChecksController < ApplicationController
   def temporal_client
     @temporal_client ||= Temporalio::Client.connect(
       ENV.fetch("TEMPORAL_ADDRESS", "localhost:7233"),
-      ENV.fetch("TEMPORAL_NAMESPACE", "default")
+      ENV.fetch("TEMPORAL_NAMESPACE", "default"),
+      interceptors: Telemetry.interceptors
     )
   end
 end

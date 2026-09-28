@@ -38,6 +38,13 @@ gem "sidekiq"
 # Official Temporal Ruby SDK, for durable workflow orchestration
 gem "temporalio", "~> 1.9"
 
+# Loads .env.local (git-ignored) for local secrets like the Honeycomb API key
+gem "dotenv-rails"
+
+# OpenTelemetry, exported via OTLP to Honeycomb
+gem "opentelemetry-sdk"
+gem "opentelemetry-exporter-otlp"
+
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"

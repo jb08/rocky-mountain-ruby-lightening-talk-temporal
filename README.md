@@ -82,6 +82,44 @@ curl localhost:3000/temporal_background_checks/background-check-...
 Open `http://localhost:8080` to watch the Temporal workflow's event history
 and timeline live -- this is the other half of the demo.
 
+## Tracing with Honeycomb (optional)
+
+The Temporal side can export a full distributed trace of each workflow run
+(`StartWorkflow` -> `RunWorkflow` -> one nested `RunActivity` span per step)
+to [Honeycomb.io](https://honeycomb.io) via OpenTelemetry. This is entirely
+additive: with no Honeycomb key configured, tracing is simply off and
+everything else behaves exactly as documented above.
+
+1. Copy the template and fill in your real key:
+
+   ```
+   cp .env.example .env.local
+   ```
+
+   Get `HONEYCOMB_API_KEY` from Honeycomb: Team Settings -> Environments ->
+   Manage API Keys. `.env.local` is git-ignored -- never commit a real key.
+
+2. `bundle install` (pulls in `dotenv-rails`, `opentelemetry-sdk`, and
+   `opentelemetry-exporter-otlp`).
+
+3. Restart `rails server`, `sidekiq`, and `script/temporal_worker.rb` so they
+   pick up the new environment variables.
+
+4. Kick off a `/temporal_background_checks` run as usual, then open
+   Honeycomb and look at the dataset named by `OTEL_SERVICE_NAME`
+   (`rocky-mountain-ruby-demo` by default). Each workflow run shows up as one
+   trace: `StartWorkflow` from the Rails client, then `RunWorkflow` and eight
+   `RunActivity` spans from the worker, all correlated and timed.
+
+This is wired in via the `temporalio` gem's built-in
+`Temporalio::Contrib::OpenTelemetry::TracingInterceptor` -- no third-party
+shim needed, just the standard OTel Ruby SDK + OTLP exporter alongside it
+(see `app/temporal/telemetry.rb` and `config/initializers/opentelemetry.rb`).
+
+Notice the Sidekiq path has no equivalent here -- getting comparable tracing
+across a chain of `perform_async` calls would mean hand-rolling span
+propagation across job boundaries yourself.
+
 ## Running the test suite
 
 ```
