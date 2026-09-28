@@ -62,7 +62,7 @@ bundle exec ruby script/temporal_worker.rb       # Temporal worker
 **Sidekiq path:**
 
 ```
-curl -X POST localhost:3000/sidekiq_background_checks -d candidate_name="Jamie Rivera"
+curl -X POST localhost:3000/sidekiq_background_checks -d candidate_name="Harry Kane"
 # => { "id": 1, "status": "pending", ... }
 
 curl localhost:3000/sidekiq_background_checks/1
@@ -72,7 +72,7 @@ curl localhost:3000/sidekiq_background_checks/1
 **Temporal path:**
 
 ```
-curl -X POST localhost:3000/temporal_background_checks -d candidate_name="Jamie Rivera"
+curl -X POST localhost:3000/temporal_background_checks -d candidate_name="Harry Kane"
 # => { "workflow_id": "background-check-...", "run_id": "..." }
 
 curl localhost:3000/temporal_background_checks/background-check-...
@@ -81,6 +81,10 @@ curl localhost:3000/temporal_background_checks/background-check-...
 
 Open `http://localhost:8080` to watch the Temporal workflow's event history
 and timeline live -- this is the other half of the demo.
+
+**Sidekiq Web UI:** open `http://localhost:3000/sidekiq` to watch the queue,
+busy workers, and retries for the Sidekiq path -- the closest equivalent to
+the Temporal UI above. No auth (this is a local demo, not a deployed app).
 
 ## Tracing with Honeycomb (optional)
 

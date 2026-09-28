@@ -40,5 +40,10 @@ module RockyMountainRuby2026Demo2
     # Middleware like session, flash, cookies can be added back manually.
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
+
+    # Sidekiq::Web (mounted at /sidekiq, see config/routes.rb) needs a real
+    # Rack session, which API-only mode strips out by default.
+    config.middleware.use ActionDispatch::Cookies
+    config.middleware.use ActionDispatch::Session::CookieStore
   end
 end
