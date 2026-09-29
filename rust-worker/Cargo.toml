@@ -1,0 +1,12 @@
+[package]
+name = "background-check-rust-worker"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+temporalio-sdk = "1.0"
+temporalio-client = "1.0"
+temporalio-common = "1.0"
+temporalio-macros = "1.0"
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"

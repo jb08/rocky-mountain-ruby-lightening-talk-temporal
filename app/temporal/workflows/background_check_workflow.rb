@@ -38,8 +38,12 @@ module Workflows
       notification = Temporalio::Workflow.execute_activity(
         Activities::NotifyCustomerAndCandidateActivity, candidate_name, start_to_close_timeout: 30
       )
+      # Routed to a separate task queue polled by the Rust worker
+      # (rust-worker/), not the Ruby one -- see README for why both workers
+      # need to be running for this step to complete.
       dispute_handling = Temporalio::Workflow.execute_activity(
-        Activities::HandlePossibleFcraDisputeActivity, candidate_name, start_to_close_timeout: 30
+        Activities::HandlePossibleFcraDisputeActivity, candidate_name,
+        task_queue: "background-check-rust", start_to_close_timeout: 30
       )
 
       {

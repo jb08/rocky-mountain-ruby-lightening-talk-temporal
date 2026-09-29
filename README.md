@@ -15,6 +15,9 @@ real PII here, only the orchestration plumbing.
 
 * Ruby 3.4.7 (see `.ruby-version`)
 * Docker (for Postgres, Redis, and the Temporal server/UI)
+* Rust + Cargo (for the Rust Temporal worker -- install via
+  [rustup](https://rustup.rs)) and `protoc` (`brew install protobuf` on
+  macOS), needed to build `rust-worker/`
 
 ## 1. Install gems
 
@@ -49,13 +52,20 @@ bin/rails db:prepare
 
 ## 4. Run the app
 
-You'll need three processes running in separate terminals:
+You'll need four processes running in separate terminals:
 
 ```
-bin/rails server                            # Rails app on http://localhost:3000
-bundle exec sidekiq -r ./config/environment.rb   # Sidekiq worker
-bundle exec ruby script/temporal_worker.rb       # Temporal worker
+bin/rails server                                 # Rails app on http://localhost:3000
+bundle exec sidekiq -r ./config/environment.rb    # Sidekiq worker
+bundle exec ruby script/temporal_worker.rb        # Temporal worker (Ruby)
+cd rust-worker && cargo run                       # Temporal worker (Rust)
 ```
+
+The Rust worker isn't optional the way Honeycomb tracing is below: one step
+of the Temporal workflow (`HandlePossibleFcraDisputeActivity`) is routed to
+the Rust worker's task queue, so a `/temporal_background_checks` run will
+start but never finish that last step until the Rust worker is running too.
+See "Cross-language Temporal" further down for why.
 
 ## 5. Try it out
 
@@ -85,6 +95,41 @@ and timeline live -- this is the other half of the demo.
 **Sidekiq Web UI:** open `http://localhost:3000/sidekiq` to watch the queue,
 busy workers, and retries for the Sidekiq path -- the closest equivalent to
 the Temporal UI above. No auth (this is a local demo, not a deployed app).
+
+## Cross-language Temporal: Ruby + Rust workers
+
+One Temporal Activity (`HandlePossibleFcraDisputeActivity`, the last step)
+is implemented twice: once in Ruby (`app/temporal/activities/`, kept for
+reference but no longer on the hot path) and once in Rust
+(`rust-worker/src/main.rs`), which is the one that actually runs it.
+
+The mechanism is exactly Temporal's own cross-language pattern (see
+[Temporal's cross-language data processing example](https://temporal.io/code-exchange/cross-language-data-processing-service-with-temporal)) --
+there's no bridge or adapter. Each language's worker just polls its own task
+queue, and the workflow names a task queue per activity call:
+
+* Every other activity call omits `task_queue:`, so it defaults to the
+  workflow's own queue (`background-check`), which the Ruby worker polls.
+* The one Rust-handled call passes `task_queue: "background-check-rust"`
+  explicitly (see `app/temporal/workflows/background_check_workflow.rb`),
+  which only the Rust worker polls.
+* Both workers connect to the same Temporal server and namespace. Temporal's
+  wire protocol doesn't care what language executes an activity, only that
+  the activity *type name* matches -- the Rust side is explicitly named
+  `#[activity(name = "HandlePossibleFcraDisputeActivity")]` to match what
+  `Temporalio::Activity::Definition` sends by default in Ruby (the class's
+  unqualified name).
+
+Temporal doesn't ship an official Rust SDK the way it does for Go, Java,
+Python, TypeScript, .NET, and Ruby, but `temporalio-sdk` 1.0 on crates.io
+(from [temporalio/sdk-rust](https://github.com/temporalio/sdk-rust)) is a
+real, documented, versioned crate built on the same core engine those
+official SDKs wrap -- see `rust-worker/Cargo.toml`.
+
+Watch the Temporal UI (`http://localhost:8080`) during a run: every other
+activity's `RunActivity` span comes from the Ruby worker, and the last one
+comes from a completely different process and language, dispatched onto its
+own task queue by the same workflow.
 
 ## Tracing with Honeycomb (optional)
 
