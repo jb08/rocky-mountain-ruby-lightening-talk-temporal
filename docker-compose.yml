@@ -46,6 +46,31 @@ services:
     ports:
       - "8080:8080"
 
+  # DBOS Conductor -- the DBOS equivalent of the Temporal UI above, for the
+  # python-worker/ demo. Off by default (needs a free license key you get
+  # yourself -- see README); start explicitly with:
+  #   docker compose --profile conductor up -d
+  conductor:
+    image: dbosdev/conductor:latest
+    profiles: ["conductor"]
+    depends_on:
+      - postgres
+    environment:
+      DBOS_CONDUCTOR_LICENSE_KEY: ${DBOS_CONDUCTOR_LICENSE_KEY:-}
+      DBOS__CONDUCTOR_DB_URL: postgresql://rocky_mountain_ruby:rocky_mountain_ruby@postgres:5432/dbos_conductor?sslmode=disable
+    ports:
+      - "8090:8090"
+
+  conductor-console:
+    image: dbosdev/console:latest
+    profiles: ["conductor"]
+    depends_on:
+      - conductor
+    environment:
+      DBOS_CONDUCTOR_URL: conductor:8090
+    ports:
+      - "8081:8080"
+
 volumes:
   postgres_data:
   temporal_postgres_data:

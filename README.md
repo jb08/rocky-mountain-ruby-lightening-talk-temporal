@@ -1,12 +1,16 @@
-# Rocky Mountain Ruby 2026 Demo: Sidekiq vs. Temporal
+# Rocky Mountain Ruby 2026 Demo: Sidekiq vs. Temporal vs. DBOS
 
-A side-by-side demo comparing two ways to orchestrate a multi-step background
-check process:
+A side-by-side demo comparing three ways to orchestrate a multi-step
+background check process:
 
 * **Sidekiq** -- plain jobs that chain themselves via `perform_async`, with a
   `BackgroundCheckRun` Postgres record tracking saga state.
 * **Temporal** -- a single `BackgroundCheckWorkflow` orchestrating Temporal
-  Activities, with no DB table needed for state.
+  Activities (in Ruby *and* Rust -- see below), with no DB table needed for
+  state, but a whole separate server to run.
+* **DBOS** -- the same steps as a Python workflow + steps, durable using
+  nothing but a Postgres database -- no broker, no separate server. See
+  `python-worker/`.
 
 Every step just returns a mocked string -- there's no real screening logic or
 real PII here, only the orchestration plumbing.
@@ -18,6 +22,7 @@ real PII here, only the orchestration plumbing.
 * Rust + Cargo (for the Rust Temporal worker -- install via
   [rustup](https://rustup.rs)) and `protoc` (`brew install protobuf` on
   macOS), needed to build `rust-worker/`
+* Python 3 (for the DBOS worker in `python-worker/`)
 
 ## 1. Install gems
 
@@ -130,6 +135,102 @@ Watch the Temporal UI (`http://localhost:8080`) during a run: every other
 activity's `RunActivity` span comes from the Ruby worker, and the last one
 comes from a completely different process and language, dispatched onto its
 own task queue by the same workflow.
+
+## DBOS + Python: a third engine
+
+`python-worker/` implements the exact same nine steps a third time, this
+time in Python with [DBOS](https://docs.dbos.dev/), using its
+decoupled-enqueuer/worker pattern from
+[DBOS's own queue-worker example](https://docs.dbos.dev/python/examples/queue-worker).
+It's intentionally standalone -- no Rails route, no shared Postgres tables
+with the app -- since the point here is DBOS itself, not wiring it into this
+particular Rails app.
+
+The pitch: no separate orchestrator process at all. DBOS's durability comes
+entirely from a `dbos` schema it creates in a Postgres database you already
+have -- this demo points it at the same Postgres container docker-compose
+already runs (just the default `postgres` maintenance database, to avoid a
+second container), via `DBOS_SYSTEM_DATABASE_URL` if you want to override it.
+
+Steps and workflow live in `python-worker/worker.py`:
+
+* `find_former_names` and `find_jurisdictions` run in parallel, enqueued
+  onto a `background-check-lookups` queue.
+* One `send_search` per alias/jurisdiction pair is enqueued onto a
+  `background-check-searches` queue with `worker_concurrency=2` -- watch
+  only 2 of the 4 searches run at once, a queue-level concurrency limit
+  declared in one line, no separate rate limiter needed.
+* The remaining five steps run in sequence, same as the other two engines.
+
+Setup and run (in `python-worker/`):
+
+```
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+python3 worker.py                              # terminal 1: the worker, blocks forever
+python3 start_background_check.py "Jamie Rivera"  # terminal 2: enqueues one run and waits for it
+```
+
+`start_background_check.py` never imports `worker.py` -- it only talks to it
+through Postgres via `DBOSClient.enqueue`, naming the workflow and queue by
+string. That's the same decoupling Sidekiq gets from Redis and Temporal gets
+from its server, but here it's just rows in a table you already have.
+
+### DBOS Conductor (optional): a web UI for the Python worker
+
+[DBOS Conductor](https://www.dbos.dev/dbos-conductor) is the DBOS equivalent
+of the Temporal UI above -- a web dashboard for watching and managing
+workflows. It's off by default here because it needs a free license key you
+have to go get yourself first:
+
+1. Create a free account and grab a dev/trial license key from
+   `https://console.dbos.dev/settings/license-key`.
+2. Put it in `.env.local`: `DBOS_CONDUCTOR_LICENSE_KEY=<your key>`.
+3. **Create Conductor's database first** (one-time, separate from the app's
+   and the worker's own system database -- Conductor expects its own, and
+   won't start cleanly without it existing already):
+   ```
+   docker compose up -d postgres   # make sure postgres itself is up first
+   docker compose exec postgres createdb -U rocky_mountain_ruby dbos_conductor
+   ```
+4. *Then* start Conductor (it's on a Compose profile so plain
+   `docker compose up -d` never pulls it in):
+   ```
+   docker compose --env-file .env.local --profile conductor up -d
+   ```
+   Give it 30-90 seconds -- `docker compose --profile conductor ps` should
+   show both `conductor` and `conductor-console` as `healthy` before you
+   try the console.
+5. Open `http://localhost:8081` and **register an application** in the
+   console. The name you register **must exactly match** the `name` field
+   in `worker.py`'s `DBOSConfig` -- that's `background-check-dbos-worker`.
+   Registering generates an API key.
+6. Put that key, plus the local Conductor websocket URL, in `.env.local`:
+   ```
+   DBOS_CONDUCTOR_KEY=<the key you just generated>
+   DBOS_CONDUCTOR_URL=ws://localhost:8090/
+   ```
+7. `pip install -r requirements.txt` again in `python-worker/` (now also
+   installs `python-dotenv`, which `worker.py` uses to load the repo's
+   shared `.env.local` -- it doesn't happen automatically otherwise), then
+   restart `worker.py`. It should now show up in the console.
+
+**Troubleshooting:**
+
+* Console shows `Something went wrong! Conductor ListApplications: 502 Bad
+  Gateway` -- Conductor hasn't finished connecting to its own database.
+  Check `docker compose logs conductor` for a repeating `database
+  "dbos_conductor" does not exist` / `Postgres is unavailable - sleeping`
+  loop, run step 3's `createdb` if you skipped it, then give it another
+  30-90 seconds. Confirmed working end-to-end with a real free/trial key.
+* Worker never shows up in the console even with a key set -- almost
+  certainly a name mismatch between what you registered and `worker.py`'s
+  `DBOSConfig["name"]`. The console is explicit about this: *"the exact
+  same name that you used to register it."* Names are case-sensitive.
+
+The free/trial key is limited to one connected executor.
 
 ## Tracing with Honeycomb (optional)
 

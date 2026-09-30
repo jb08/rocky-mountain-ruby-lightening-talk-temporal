@@ -34,3 +34,7 @@
 
 # Ignore Rust build artifacts.
 /rust-worker/target/
+
+# Ignore Python virtualenv and bytecode cache.
+/python-worker/.venv/
+/python-worker/__pycache__/
